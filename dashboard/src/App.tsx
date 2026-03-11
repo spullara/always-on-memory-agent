@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 type TabKey = "ingest" | "query" | "memories";
 
@@ -28,6 +28,11 @@ type Memory = {
 type MemoriesResponse = {
   memories: Memory[];
   count: number;
+};
+
+type UploadedFile = {
+  name: string;
+  size: number;
 };
 
 const SAMPLE_TEXTS = [
@@ -105,6 +110,20 @@ async function apiPost<T>(path: string, payload: unknown): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function apiUpload(
+  path: string,
+  formData: FormData,
+): Promise<{ status: string; files: UploadedFile[] }> {
+  const response = await fetch(`/api${path}`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return (await response.json()) as { status: string; files: UploadedFile[] };
+}
+
 async function readError(response: Response): Promise<string> {
   try {
     const data = (await response.json()) as { error?: string };
@@ -137,6 +156,16 @@ function importanceTone(importance: number): string {
   return "low";
 }
 
+function formatFileSize(size: number): string {
+  if (size < 1024) {
+    return `${size} B`;
+  }
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`;
+  }
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState<TabKey>("ingest");
   const [stats, setStats] = useState<Stats | null>(null);
@@ -150,8 +179,12 @@ function App() {
   const [ingestTiming, setIngestTiming] = useState<number | null>(null);
   const [consolidateResult, setConsolidateResult] = useState("");
   const [consolidateTiming, setConsolidateTiming] = useState<number | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [uploadStatus, setUploadStatus] = useState("");
   const [globalError, setGlobalError] = useState("");
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const memoryCountLabel = useMemo(() => {
     return memories.length === 1 ? "1 memory" : `${memories.length} memories`;
@@ -231,6 +264,39 @@ function App() {
       await Promise.all([refreshStatus(), refreshMemories()]);
     } catch (error) {
       setGlobalError(error instanceof Error ? error.message : "Consolidation failed.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleUpload() {
+    if (selectedFiles.length === 0) {
+      setGlobalError("Choose at least one file before uploading.");
+      return;
+    }
+
+    setBusyAction("upload");
+    setGlobalError("");
+    setUploadStatus(`Uploading ${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}...`);
+
+    const formData = new FormData();
+    for (const file of selectedFiles) {
+      formData.append("files", file);
+    }
+
+    try {
+      const result = await apiUpload("/upload", formData);
+      setUploadedFiles(result.files);
+      setUploadStatus(
+        `Uploaded ${result.files.length} file${result.files.length === 1 ? "" : "s"} to the inbox.`,
+      );
+      setSelectedFiles([]);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } catch (error) {
+      setUploadStatus("");
+      setGlobalError(error instanceof Error ? error.message : "Upload failed.");
     } finally {
       setBusyAction(null);
     }
@@ -409,10 +475,52 @@ function App() {
               </div>
             </Panel>
 
-            <Panel title="Upload Files" subtitle="Pending backend support for `/upload`. For now, drop files into `./inbox` to use the watcher.">
-              <div className="upload-placeholder">
-                <p>The existing TypeScript API does not expose `/upload` yet.</p>
-                <p>Supported today: text, images, audio, video, and PDFs via the watched inbox folder.</p>
+            <Panel title="Upload Files" subtitle="Send files directly to the watched inbox folder through `/upload`.">
+              <div className="upload-panel">
+                <input
+                  ref={fileInputRef}
+                  className="file-input"
+                  type="file"
+                  multiple
+                  accept=".txt,.md,.json,.csv,.log,.xml,.yaml,.yml,.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.mp3,.wav,.ogg,.flac,.m4a,.aac,.mp4,.webm,.mov,.avi,.mkv,.pdf"
+                  disabled={busyAction !== null}
+                  onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))}
+                />
+                <div className="action-row">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={busyAction !== null || selectedFiles.length === 0}
+                    onClick={() => void handleUpload()}
+                  >
+                    {busyAction === "upload" ? "Uploading..." : "Upload to Inbox"}
+                  </button>
+                  <span className="upload-hint">Supports text, images, audio, video, and PDFs.</span>
+                </div>
+                {selectedFiles.length > 0 ? (
+                  <div className="upload-list">
+                    {selectedFiles.map((file) => (
+                      <div key={`${file.name}:${file.size}:${file.lastModified}`} className="upload-list-item">
+                        <span>{file.name}</span>
+                        <small>{formatFileSize(file.size)}</small>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {uploadStatus ? <div className="banner upload">{uploadStatus}</div> : null}
+                {uploadedFiles.length > 0 ? (
+                  <div className="upload-results">
+                    <p>Uploaded files</p>
+                    <ul className="uploaded-files">
+                      {uploadedFiles.map((file) => (
+                        <li key={`${file.name}:${file.size}`}>
+                          <span>{file.name}</span>
+                          <small>{formatFileSize(file.size)}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </div>
             </Panel>
 
