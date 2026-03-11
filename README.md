@@ -60,7 +60,7 @@ Input: "Anthropic reports 62% of Claude usage is code-related.
 
 **Three ways to ingest:**
 - **File watcher**: Drop any supported file in the `./inbox` folder. The agent picks it up automatically.
-- **Dashboard upload**: Use the 📎 Upload button in the Streamlit dashboard.
+- **Dashboard upload**: The planned React + Vite dashboard will support 📎 Upload.
 - **HTTP API**: `POST /ingest` with text content.
 
 ### 2. Consolidate
@@ -114,9 +114,9 @@ A: "Based on your memories, prioritize:
 ### 1. Install
 
 ```bash
-git clone https://github.com/Shubhamsaboo/always-on-memory-agent.git
+git clone https://github.com/spullara/always-on-memory-agent.git
 cd always-on-memory-agent
-pip install -r requirements.txt
+npm install
 ```
 
 ### 2. Set your API key
@@ -130,7 +130,7 @@ Get your API key from [Vertex AI Studio](https://vertexai.google.com/) or [Googl
 ### 3. Start the agent
 
 ```bash
-python agent.py
+npm start
 ```
 
 That's it. The agent is now running:
@@ -165,11 +165,11 @@ curl "http://localhost:8888/query?q=what+do+you+know"
 ### 6. Dashboard (optional)
 
 ```bash
-streamlit run dashboard.py
-# Opens at http://localhost:8501
+cd dashboard && npm run dev
+# Planned React + Vite dashboard
 ```
 
-The Streamlit dashboard connects to the running agent and provides a visual interface for:
+The planned React + Vite dashboard will connect to the running agent and provide a visual interface for:
 - **Ingesting** text and uploading files (images, audio, video, PDFs)
 - **Querying** memory with natural language
 - **Browsing** and **deleting** stored memories
@@ -190,7 +190,7 @@ The Streamlit dashboard connects to the running agent and provides a visual inte
 ## CLI Options
 
 ```bash
-python agent.py [options]
+npm start -- --watch DIR --port PORT --consolidate-every MIN
 
   --watch DIR              Folder to watch (default: ./inbox)
   --port PORT              HTTP API port (default: 8888)
@@ -201,12 +201,19 @@ python agent.py [options]
 
 ```
 always-on-memory-agent/
-├── agent.py          # Always-on ADK agent (the real thing)
-├── dashboard.py      # Streamlit UI (connects to agent API)
-├── requirements.txt  # Dependencies
-├── inbox/            # Drop any file here for auto-ingestion
-├── docs/             # Logo assets (Gemini, ADK)
-└── memory.db         # SQLite database (created automatically)
+├── src/
+│   ├── agents.ts         # ADK agent definitions
+│   ├── db.ts             # SQLite memory store
+│   ├── memory-agent.ts   # Orchestrates ingest, query, consolidation
+│   ├── server.ts         # Express HTTP API
+│   ├── watcher.ts        # File watcher for inbox/
+│   ├── consolidation.ts  # Consolidation timer logic
+│   └── index.ts          # CLI entrypoint
+├── dashboard/            # Planned React + Vite UI
+├── inbox/                # Drop any file here for auto-ingestion
+├── docs/                 # Logo assets (Gemini, ADK)
+├── package.json          # Dependencies and scripts
+└── memory.db             # SQLite database (created automatically)
 ```
 
 ## Why Gemini 3.1 Flash-Lite?
@@ -219,11 +226,12 @@ This agent runs continuously. Cost and speed matter more than raw intelligence f
 
 ## Built With
 
-- [Google ADK](https://google.github.io/adk-docs/) (Agent Development Kit) for agent orchestration
+- [@google/adk](https://google.github.io/adk-docs/) (TypeScript Agent Development Kit) for agent orchestration
 - [Gemini 3.1 Flash-Lite](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/3-1-flash-lite) for all LLM operations
-- SQLite for persistent memory storage
-- aiohttp for the HTTP API
-- Streamlit for the dashboard
+- [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) for persistent memory storage
+- [Express](https://expressjs.com/) for the HTTP API
+- [chokidar](https://github.com/paulmillr/chokidar) for file watching
+- React + Vite for the planned dashboard
 
 ## License
 
